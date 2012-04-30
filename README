@@ -1,0 +1,14 @@
+This toolset exists to automatically generate a Hardware Compatibility List from
+a given illumos workspace. On illumos-based system with a copy of the
+illumos-gate which is pointed to by the environment variable WS_ROOT, do the
+following:
+
+ 1) Update the makefile to point to a different gcc if necessary
+ 2) Run make
+ 3) Run ./parser $WS_ROOT/usr/src/pkg/manifests > hcl.html
+ 4) scp hcl.html illumos_header.png to your webserver of choice
+
+Note that this currently contains copies of libraries and tools that are slowly
+making their way into illumos. The libraries and files here are not intended for
+use in any other environment and their construction is clearly not ideal for any
+other use.

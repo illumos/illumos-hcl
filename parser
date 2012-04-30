@@ -1,0 +1,250 @@
+#!/bin/bash
+#
+# CDDL HEADER START
+#
+# The contents of this file are subject to the terms of the
+# Common Development and Distribution License (the "License").
+# You may not use this file except in compliance with the License.
+#
+# You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+# or http://www.opensolaris.org/os/licensing.
+# See the License for the specific language governing permissions
+# and limitations under the License.
+#
+# When distributing Covered Code, include this CDDL HEADER in each
+# file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+# If applicable, add the following below this CDDL HEADER, with the
+# fields enclosed by brackets "[]" replaced with your own identifying
+# information: Portions Copyright [yyyy] [name of copyright owner]
+#
+# CDDL HEADER END
+#
+
+#
+# Copyright (c) 2012 Joyent, Inc.
+#
+
+# The general idea here is that we want to iterate over the set of manifest
+# files that exist. We need to first determine whether or not they refer to
+# something which is sparc specific, i386 specific, or we don't care.
+#
+# The way that this manifest format works is that it looks for lines that start
+# with driver, and then they may contain one or more alias statements that
+# relate to that driver. They may either be on the same line, or be continued on
+# subsequent lines with '\' characters.
+#
+# All manifest files have a single variant.arch set. Some manifest files have
+# multiple drivers. Some manifest files have an i386_ONLY or sparc_ONLY before
+# the driver line.
+#
+# For the different cases, here are samples of what we care about:
+#   o driver-network-igb (Single driver, aliases on multiple lines)
+#   o driver-network-emlxs.mf (Two drivers, alias on multiple lines)
+#   o driver-audio-audiocmihd (One driver, alias on same line)
+#   o system-kernel.mf (Has i386_ONLY lines)
+#
+
+#
+# Users like to alias ls to something else, we don't like that.
+#
+unalias -a
+
+p_arg0=$(basename $0)
+p_targ=$1
+p_data=
+p_bad=
+
+function fail
+{
+        local msg="$*"
+        [[ -z "$msg" ]] && msg="failed"
+        echo "$p_arg0: $msg" >&2
+        exit 1
+}
+
+function parse
+{
+	local file=$1
+
+	#
+	# This is probably an abuse of awk. name=driver is always $2
+	#
+	p_data=$(nawk < $file '{
+		if ($1 ~ ".*driver") { drv=$2
+			pdrv=1
+			for (ii = 3; ii < NR; ii++) {
+				if ($ii ~ "alias=pci(ex)?[0-9a-fA-F,.]+") {
+					if ($ii ~ "pci(ex)?class")
+						continue
+					if ($ii ~ "pciex_root_complex")
+						continue
+					if (pdrv) {
+						print drv
+						pdrv=0
+					}
+					print $ii
+
+				}
+			}
+		}
+	}
+
+	{
+		if ($1 ~ "alias=pci(ex)?[0-9a-fA-F,.]+") {
+			if ($1 ~ "pci(ex)?class")
+				continue
+			if (pdrv) {
+				print drv
+				pdrv=0
+			}
+			print $1
+		}
+	}' | nawk 'BEGIN {
+		FS="="
+	}
+
+	{
+		if ($1 == "alias") {
+			sub("pci(ex)*", "", $2)
+			print $2
+		} else {
+			print $2
+		}
+	}')
+}
+
+#
+# Given a text stream, do a pcidb lookup for everything that we can.
+#
+function lookup
+{
+	local line drv mod
+	local file=$1
+	drv=
+
+	[[ -n "$p_data" ]] || return;
+
+	for line in $p_data; do
+		if [[ "$line" =~ [0-9a-fA-F,.]{6,} ]]; then
+			mod="$(./pcilookup $line 2>&1)"
+			if [[ $? -eq 0 ]]; then
+				mod=$(echo $mod | sed 's/|/ /g')
+				cat <<EOF
+      <li class="outer">$mod
+	<ul>
+	  <li>Driver: $drv</li>
+	  <li>PCI ID: $line</li>
+	  <li>Originating manifest: $(basename $file)</li>
+	</ul>
+      </li>
+EOF
+			else
+				p_bad="      <li>Unknown ID ($line) from driver: $drv mf: $(basename $file): $mod</li>\n$p_bad"
+			fi
+		else
+			drv=$line
+		fi
+	done
+}
+
+function setup
+{
+	cat <<EOF
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>illumos HCL - WIP</title>
+    <style>
+	.content {
+		padding: 25px 50px;
+		width: 750px;
+		margin: 25px auto;
+	}
+
+	h1.intro {
+		text-align: center;
+		margin-top: -65px;
+	}
+	li.outer {
+		margin-bottom: .75em;
+		font-size: 1.1em;
+	}
+	.outer ul {
+		display: none;
+	}.outer.expanded ul { display: block; }
+	.outer:hover {
+		list-style-type: circle;
+		cursor: pointer;
+	}
+    </style>
+  </head>
+  <body>
+    <img src="./illumos_header.png" />
+    <h1 class="intro">Hardware Compatability List</h1>
+    <div class="content">
+    <p>
+
+	Welcome to the illumos Hardware Compatibility List (HCL). This is a work
+	in progress. All the devices listed below are supported by the illumos
+	kernel. Note that some devices that are supported, may not be explicitly
+	listed here at this time.
+
+    </p>
+
+    <p>Click a device to get more information.</p>
+
+    <ul>
+EOF
+}
+
+function finish
+{
+	cat <<EOF
+    </ul>	
+    <p>
+
+	The following are a list of devices and ids which are supported, but are
+	not currently in the PCI database. These represent errors both in our
+	manifests and ommissions in the PCI database.
+    </p>
+    <ul>
+EOF
+	print $p_bad
+	cat <<EOF
+    </ul>
+    <p>
+      Generated by rm's $p_arg0 at $(TZ=UTC date).
+    </p>
+    </div>
+    <script type="text/javascript"
+       src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js">
+    </script>
+    <script type="text/javascript">
+       \$('.content > ul').on('click', 'li.outer', function() {
+            \$(this).toggleClass('expanded');
+       });
+    </script>
+  </body>
+</html>
+EOF
+}
+
+[[ -n $p_targ ]] || fail "missing target"
+
+if [[ -d $p_targ ]]; then
+	setup
+	for f in $(ls $p_targ); do
+		[[ -f $p_targ/$f ]] && parse $p_targ/$f
+		lookup $f
+	done
+	finish
+elif [[ -f $p_targ ]]; then
+	setup
+	parse $p_targ
+	lookup $p_targ
+	finish
+else
+	fail "invalid target: $p_targ must be a file or directory"
+fi
