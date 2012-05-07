@@ -333,7 +333,10 @@ pcidb_open(int version)
 	h->ph_vstart = NULL;
 	h->ph_vend = NULL;
 
-	f = fopen(pci_db, "rF");
+	if (getenv("PCI_DB_PATH") != NULL)
+		f = fopen(getenv("PCI_DB_PATH"), "rF");
+	else
+		f = fopen(pci_db, "rF");
 	if (f == NULL) {
 		free(h);
 		return (NULL);
