@@ -28,7 +28,7 @@ CFLAGS=-Wall -Wextra -std=c99 -pedantic -m64 -D__EXTENSIONS__ -g
 CSOFLAGS=-fPIC
 CTFLAGS=-L VERSION
 CMD=pcilookup
-CMDLIBS=-L. -R. -lpcidb
+CMDLIBS=-L. -R\$$ORIGIN -lpcidb
 
 all: libpcidb.so pcilookup
 

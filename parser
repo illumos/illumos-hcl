@@ -49,6 +49,18 @@
 #
 unalias -a
 
+#
+# We expect a particular nawk, and that pcilookup is available
+#
+DIR=$(dirname ${BASH_SOURCE[0]})
+NAWK=/usr/bin/nawk
+PCILOOKUP=${DIR}/pcilookup
+
+#
+# Tell pcilookup where to find pci.ids
+#
+export PCI_DB_PATH=${DIR}/pci.ids
+
 p_arg0=$(basename $0)
 p_targ=$1
 p_data=
@@ -69,7 +81,7 @@ function parse
 	#
 	# This is probably an abuse of awk. name=driver is always $2
 	#
-	p_data=$(nawk < $file '{
+	p_data=$($NAWK < $file '{
 		if ($1 ~ ".*driver") { drv=$2
 			pdrv=1
 			for (ii = 3; ii < NR; ii++) {
@@ -99,7 +111,7 @@ function parse
 			}
 			print $1
 		}
-	}' | nawk 'BEGIN {
+	}' | $NAWK 'BEGIN {
 		FS="="
 	}
 
@@ -126,7 +138,7 @@ function lookup
 
 	for line in $p_data; do
 		if [[ "$line" =~ [0-9a-fA-F,.]{6,} ]]; then
-			mod="$(./pcilookup $line 2>&1)"
+			mod="$($PCILOOKUP $line 2>&1)"
 			if [[ $? -eq 0 ]]; then
 				mod=$(echo $mod | sed 's/|/ /g')
 				cat <<EOF
@@ -211,7 +223,7 @@ function finish
     </p>
     <ul>
 EOF
-	print $p_bad
+	printf "$p_bad"
 	cat <<EOF
     </ul>
     <p>
