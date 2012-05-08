@@ -194,7 +194,7 @@ function setup
   </head>
   <body>
     <img src="./illumos_header.png" />
-    <h1 class="intro">Hardware Compatability List</h1>
+    <h1 class="intro">Hardware Compatibility List</h1>
     <div class="content">
     <p>
 
@@ -219,7 +219,7 @@ function finish
 
 	The following are a list of devices and ids which are supported, but are
 	not currently in the PCI database. These represent errors both in our
-	manifests and ommissions in the PCI database.
+	manifests and omissions in the PCI database.
     </p>
     <ul>
 EOF
