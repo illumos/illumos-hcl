@@ -59,7 +59,7 @@ PCILOOKUP=${DIR}/pcilookup
 #
 # Tell pcilookup where to find pci.ids
 #
-export PCI_DB_PATH=${DIR}/pci.ids
+export PCI_DB_PATH=${PCI_DB_PATH=:-$DIR/pci.ids}
 
 p_arg0=$(basename $0)
 p_targ=$1
@@ -104,7 +104,7 @@ function parse
 	{
 		if ($1 ~ "alias=pci(ex)?[0-9a-fA-F,.]+") {
 			if ($1 ~ "pci(ex)?class")
-				continue
+				next
 			if (pdrv) {
 				print drv
 				pdrv=0
